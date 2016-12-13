@@ -1,0 +1,534 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% USAGE
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% This model relies on a set of cpp macros in order to improve the
+% readability. Thus, its verification requires to execute the command
+% "cpp memory_model.cvc | grep -v ^\# > memory_model-cpp.cvc" in order
+% to produce the pre-processed file.
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% CONDITIONAL MODEL
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%% Enables/Disables the constraints over events belonging to
+%% the relations. This is not necessary when expanding the
+%% quantifiers.
+#define RELATIONS_OVER_EV_SET
+
+%% Enables/Disables the fixed event definition
+%#define PROBLEM_DEF
+
+%% Bounded and unbounded integers selection
+%#define BOUND_INTEGERS 
+
+%% Enable the possibility to bound the total number
+%% of assertions in the model (might be useful for
+%% debugging)
+%#define BOUND_ASSERTIONS
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+#ifdef BOUND_INTEGERS
+#define Int(val) I##val
+#else
+#define Int(val) val
+#endif
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% MACROS DEFINITION
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+#define SeqCst(e) (e.R = SC)
+#define Range(e) (e.M)
+#define Block(e) (e.B)
+#define Init(e) (e.R = I)
+#define Read(e) (e.O = R)
+#define Write(e) (e.O = W)
+#define RoM(e) ((e.O = R) OR (e.O = M))
+#define WoM(e) ((e.O = W) OR (e.O = M))
+#define Tear(e) (e.T = WT)
+#define NoTear(e) (e.T = NT)
+#define RangeEQ(e1,e2) ((Range(e1) = Range(e2)) AND (Block(e1) = Block(e2)))
+#define RangeIN(e1,e2) ((NOT((Range(e1) & Range(e2)) = empty_int_set)) AND (Block(e1) = Block(e2)))
+#define RBF(e1,e2) ((e1,e2) IS_IN RBF)
+#define RF(e1,e2) ((e1,e2) IS_IN RF)
+#define SW(e1,e2) ((e1,e2) IS_IN SW)
+#define AO(e1,e2) ((e1,e2) IS_IN AO)
+#define HSW(e1,e2) ((e1,e2) IS_IN HSW)
+#define HB(e1,e2) ((e1,e2) IS_IN HB)
+#define DO(e1,e2) ((e1,e2) IS_IN DO)
+#define MO(e1,e2) ((e1,e2) IS_IN MO)
+#define Empty(r) (r = empty_rel_set)
+#define NEmpty(r) (NOT(Empty(r)))
+#define ITE(c,t,e) (IF c THEN t ELSE e ENDIF)
+#define BTOI(b) (ITE(b,1,0))
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% DATA TYPES DEFINITION
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+DATATYPE MOPERATION = R | W | M END;
+DATATYPE ORDER = I | SC | U END;
+
+DATATYPE BINT = I0 | I1 | I2 | I3 END;
+
+DATATYPE TEAR_TYPE = WT | NT END;
+
+SDBLOCK_TYPE: TYPE;
+VALUE_TYPE: TYPE;
+
+#ifdef BOUND_INTEGERS
+ADDRESS_TYPE: TYPE = SET OF BINT;
+#else
+ADDRESS_TYPE: TYPE = SET OF INT;
+#endif
+
+MEM_OP_TYPE : TYPE = [# N:STRING, O:MOPERATION, T:TEAR_TYPE, R:ORDER, B:SDBLOCK_TYPE, M:ADDRESS_TYPE, V:VALUE_TYPE #];
+
+EV_REL: TYPE = SET OF [MEM_OP_TYPE, MEM_OP_TYPE];
+THREAD_TYPE : TYPE = [# E:SET OF MEM_OP_TYPE, PO:EV_REL #];
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% COMMON INSTANCES
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+#ifdef BOUND_INTEGERS
+empty_int_set: SET OF BINT;
+ASSERT empty_int_set = {}:: SET OF BINT;
+#else
+empty_int_set: SET OF INT;
+ASSERT empty_int_set = {}:: SET OF INT;
+#endif
+
+empty_rel_set: EV_REL;
+ASSERT empty_rel_set = {}:: EV_REL;
+
+ev_set : SET OF MEM_OP_TYPE;
+
+RBF : EV_REL;
+SW : EV_REL;
+HSW : EV_REL;
+RF : EV_REL;
+HB : EV_REL;
+AO : EV_REL;
+MO : EV_REL;
+DO : EV_REL;
+
+
+% #if defined RELATIONS_OVER_EV_SET && ! defined PROBLEM_DEF
+
+% ASSERT (FORALL (e1,e2 : MEM_OP_TYPE) : (AO(e1,e2)  => ((e1 IS_IN ev_set) AND (e2 IS_IN ev_set))));
+% ASSERT (FORALL (e1,e2 : MEM_OP_TYPE) : (DO(e1,e2)  => ((e1 IS_IN ev_set) AND (e2 IS_IN ev_set))));
+
+% #endif
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% EXAMPLE OF TWO THREADS WITH 2 MEMORY OPERATIONS EACH
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+m1 : SDBLOCK_TYPE;
+
+or1 : MEM_OP_TYPE;
+or2 : MEM_OP_TYPE;
+
+ow1 : MEM_OP_TYPE;
+ow2 : MEM_OP_TYPE;
+
+v1 : VALUE_TYPE;
+v2 : VALUE_TYPE;
+v3 : VALUE_TYPE;
+v4 : VALUE_TYPE;
+
+ASSERT (or1.N = "or1") AND
+#ifdef PROBLEM_DEF
+       (or1.O = R) AND
+       (or1.T = NT) AND
+       (or1.R = U) AND
+       (or1.M = {Int(0)}) AND
+       (or1.B = m1) AND
+#endif       
+       (or1.V = v1);
+
+ASSERT (ow1.N = "ow1") AND
+#ifdef PROBLEM_DEF
+       (ow1.O = W) AND
+       (ow1.T = NT) AND
+       (ow1.R = U) AND
+       (ow1.M = {Int(0)}) AND
+       (ow1.B = m1) AND
+#endif
+       (ow1.V = v2);
+
+ASSERT (or2.N = "or2") AND
+#ifdef PROBLEM_DEF
+       (or2.O = R) AND
+       (or2.T = NT) AND
+       (or2.R = U) AND
+       (or2.M = {Int(0)}) AND
+       (or2.B = m1) AND
+#endif       
+       (or2.V = v3);
+
+ASSERT (ow2.N = "ow2") AND
+#ifdef PROBLEM_DEF
+       (ow2.O = W) AND
+       (ow2.T = NT) AND
+       (ow2.R = U) AND
+       (ow2.M = {Int(0)}) AND
+       (ow2.B = m1) AND
+#endif       
+       (ow2.V = v4);
+
+t1 : THREAD_TYPE;
+t2 : THREAD_TYPE;
+
+po1 : EV_REL;
+po2 : EV_REL;
+
+ASSERT po1 = {(or1, ow1)};
+ASSERT po2 = {(or2, ow2)};
+
+ASSERT (t1.E = {or1, ow1}) AND t1.PO = po1;
+ASSERT (t2.E = {or2, ow2}) AND t2.PO = po2;
+
+ASSERT NOT(v3 = v4);
+ASSERT AO = po1 | po2;
+
+%ASSERT ev_set = t1.E | t2.E;
+
+ASSERT ev_set = {or1, ow1, or2, ow2};
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Reads Bytes From relation %%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+en_RBF2 : BOOLEAN;
+
+#ifndef BOUND_ASSERTIONS
+ASSERT en_RBF2;
+#endif
+
+#define RBF2(er,ew) (en_RBF2 => (RangeIN(er,ew)))
+
+en_RBF : BOOLEAN;
+ASSERT en_RBF => (FORALL (er,ew IN ev_set) : (RBF(er, ew) <=> (RoM(er) AND WoM(ew) AND RBF2(er,ew))));
+
+#ifndef BOUND_ASSERTIONS
+ASSERT en_RBF;
+#endif
+
+#ifdef RELATIONS_OVER_EV_SET
+ASSERT (FORALL (e1,e2 : MEM_OP_TYPE) : (RBF(e1,e2) => ((e1 IS_IN ev_set) AND (e2 IS_IN ev_set))));
+#endif
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Reads From relation %%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+en_RF : BOOLEAN;
+ASSERT en_RF => (RF = RBF);
+
+#ifndef BOUND_ASSERTIONS
+ASSERT en_RF;
+#endif
+
+#ifdef RELATIONS_OVER_EV_SET
+ASSERT (FORALL (e1,e2 : MEM_OP_TYPE) : (RF(e1,e2)  => ((e1 IS_IN ev_set) AND (e2 IS_IN ev_set))));
+#endif
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Synchronizes With relation %%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+en_SW4 : BOOLEAN;
+en_SW4c : BOOLEAN;
+en_SW4di : BOOLEAN;
+en_SW4d : BOOLEAN;
+en_SW5 : BOOLEAN;
+
+#ifndef BOUND_ASSERTIONS
+ASSERT en_SW4;
+ASSERT en_SW4c;
+ASSERT en_SW4di;
+ASSERT en_SW4d;
+ASSERT en_SW5;
+#endif
+
+#define SW4(er,ew) (en_SW4 => (SeqCst(er) AND RF(er,ew)))
+#define SW4c(er,ew) (en_SW4c => (SeqCst(ew) AND RangeEQ(er,ew)))
+#define SW4di(er) (en_SW4di => (FORALL (ev IN ev_set) : (RF(er,ev) => Init(ev))))
+#define SW4d(er,ew) (en_SW4d => (Init(ew) AND SW4di(er)))
+#define SW5(er,ew) (en_SW5 => (HSW(er,ew)))
+
+en_SW : BOOLEAN;
+ASSERT en_SW => (FORALL (er,ew IN ev_set) : ((SW(er,ew)) <=> ((SW4(er,ew) AND (SW4c(er,ew) OR SW4d(er,ew))) OR SW5(er,ew))));
+
+#ifndef BOUND_ASSERTIONS
+ASSERT en_SW;
+#endif
+
+#ifdef RELATIONS_OVER_EV_SET
+ASSERT (FORALL (e1,e2 : MEM_OP_TYPE) : (SW(e1,e2)  => ((e1 IS_IN ev_set) AND (e2 IS_IN ev_set))));
+#endif
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Happens Before relation %%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+en_HB4a : BOOLEAN;
+en_HB4b : BOOLEAN;
+en_HB4c : BOOLEAN;
+
+#ifndef BOUND_ASSERTIONS
+ASSERT en_HB4a;
+ASSERT en_HB4b;
+ASSERT en_HB4c;
+#endif
+
+#define HB4a(ee, ed) (en_HB4a => (AO(ee, ed)))
+#define HB4b(ee, ed) (en_HB4b => (SW(ee, ed)))
+#define HB4c(ee, ed) (en_HB4c => (Init(ee) AND RangeIN(ee,ed)))
+
+HBp : EV_REL;
+
+#define HBp(e1,e2) ((e1,e2) IS_IN HBp)
+
+en_HB : BOOLEAN;
+ASSERT en_HB => ((HB = TCLOSURE(HBp)) AND (FORALL (ee,ed IN ev_set) : (HBp(ee,ed) <=> (HB4a(ee,ed) OR HB4b(ee,ed) OR HB4c(ee,ed)))));
+
+#ifndef BOUND_ASSERTIONS
+ASSERT en_HB;
+#endif
+
+#ifdef RELATIONS_OVER_EV_SET
+ASSERT (FORALL (e1,e2 : MEM_OP_TYPE) : (HB(e1,e2)  => ((e1 IS_IN ev_set) AND (e2 IS_IN ev_set))));
+#endif
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Coherent Reads property %%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+en_CR2 : BOOLEAN;
+
+#ifndef BOUND_ASSERTIONS
+ASSERT en_CR2;
+#endif
+
+#define CR2(er,ew) (en_CR2 => (NOT (EXISTS (e1 IN ev_set) : (WoM(e1) AND HB(ew,e1) AND HB(e1,er)))))
+
+CR : BOOLEAN;
+
+en_CR : BOOLEAN;
+ASSERT en_CR => (CR <=> (FORALL (er, ew : MEM_OP_TYPE) : (RBF(er, ew) => ((NOT HB(er, ew)) AND CR2(er, ew)))));
+
+#ifndef BOUND_ASSERTIONS
+ASSERT en_CR;
+#endif
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% No Out of Thin Air property %%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+AOT : BOOLEAN;
+
+en_AOT : BOOLEAN;
+ASSERT en_AOT => (AOT <=> (FORALL (ee IN ev_set) : (NOT((ee,ee) IS_IN TCLOSURE(DO | RF)))));
+
+#ifndef BOUND_ASSERTIONS
+ASSERT en_AOT;
+#endif
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Tear Free Reads property %%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+en_TFR2aiiA1 : BOOLEAN;
+en_TFR2aiiA : BOOLEAN;
+en_TFR2aii : BOOLEAN;
+en_TFR2a : BOOLEAN;
+
+#ifndef BOUND_ASSERTIONS
+ASSERT en_TFR2aiiA1;
+ASSERT en_TFR2aiiA;
+ASSERT en_TFR2aii;
+ASSERT en_TFR2a;
+#endif
+
+#define TFR2aiiA1(er,ew) (en_TFR2aiiA1 => (NOT (EXISTS (ev IN ev_set) : ( (RangeEQ(er,ew) AND NoTear(ev) AND (NOT (ev = ew)) AND RF(er,ew))))))
+#define TFR2aiiA(er,ew) (en_TFR2aiiA => ((RangeEQ(er,ew)) => TFR2aiiA1(er,ew)))
+#define TFR2aii(er) (en_TFR2aii => (FORALL (ew IN ev_set) : ((RF(er, ew) AND NoTear(ew)) => TFR2aiiA(er,ew))))
+#define TFR2a(er) (en_TFR2a => (NoTear(er) => TFR2aii(er)))
+
+TFR : BOOLEAN;
+
+en_TFR : BOOLEAN;
+ASSERT en_TFR => (TFR <=> (FORALL (er IN ev_set) : (RoM(er) => TFR2a(er))));
+
+#ifndef BOUND_ASSERTIONS
+ASSERT en_TFR;
+#endif
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Memory Order relation %%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+en_MO3bii : BOOLEAN;
+en_MO3b : BOOLEAN;
+en_MO3a : BOOLEAN;
+
+#ifndef BOUND_ASSERTIONS
+ASSERT en_MO3bii;
+ASSERT en_MO3b;
+ASSERT en_MO3a;
+#endif
+
+#define MO3bii(ee,ed) (en_MO3bii => (NOT (EXISTS (ew IN ev_set) : (WoM(ew) AND RangeEQ(ew,ed) AND MO(ee,ed) AND MO(ew,ed)))))
+#define MO3b(ee,ed) (en_MO3b => (SW(ee,ed) => MO3bii(ee,ed)))
+#define MO3a(ee,ed) (en_MO3a => HB(ee,ed))
+
+en_MO : BOOLEAN;
+ASSERT en_MO => (FORALL (ee,ed IN ev_set) : (MO(ee,ed) <=> (MO3a(ee,ed) AND MO3b(ee,ed))));
+
+#ifndef BOUND_ASSERTIONS
+ASSERT en_MO;
+#endif
+
+#ifdef RELATIONS_OVER_EV_SET
+ASSERT (FORALL (e1,e2 : MEM_OP_TYPE) : (MO(e1,e2)  => ((e1 IS_IN ev_set) AND (e2 IS_IN ev_set))));
+#endif
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Sequentially Consistent Atomics property %%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+SCA : BOOLEAN;
+
+en_SCA : BOOLEAN;
+ASSERT en_SCA => (SCA <=> NEmpty(MO));
+
+#ifndef BOUND_ASSERTIONS
+ASSERT en_SCA;
+#endif
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Valid Execution property %%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+ne_SW : BOOLEAN;
+ne_HB : BOOLEAN;
+ne_RBF : BOOLEAN;
+ne_RF : BOOLEAN;
+
+#ifndef BOUND_ASSERTIONS
+ASSERT ne_SW;
+ASSERT ne_HB;
+ASSERT ne_RBF;
+ASSERT ne_RF;
+#endif
+
+VE : BOOLEAN;
+
+en_VE : BOOLEAN;
+ASSERT en_VE => (VE <=> ((ne_SW  => NEmpty(SW)) AND
+                        (ne_HB  => NEmpty(HB)) AND
+                        (ne_RBF => NEmpty(RBF)) AND
+                        (ne_RF  => NEmpty(RF)) AND
+                        CR AND
+                        AOT AND
+                        TFR AND
+                        SCA));
+
+#ifndef BOUND_ASSERTIONS
+%ASSERT en_VE;
+#endif
+
+ASSERT TFR;
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Race Condition property %%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+#define RC5(ee,ed) (RF(ee,ed) OR RF(ed,ee))
+#define RC4a(ee,ed) (RangeIN(ee,ed))
+#define RC4p(ee,ed) (WoM(ee) AND WoM(ed))
+#define RC4(ee,ed) ((RC4p(ee,ed) => RC4a(ee,ed)) AND ((NOT RC4p(ee,ed)) => RC5(ee,ed)))
+
+#define RC(ee,ed) (NOT(HB(ee,ed) OR HB(ed,ee)) AND RC4(ee,ed))
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Data Race Condition property %%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+#define DRC2(ee,ed) (NOT(SeqCst(ee) AND SeqCst(ed)) OR RangeIN(ed,ee))
+#define DRC(ee,ed) (RC(ee,ed) AND DRC2(ee,ed))
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Data Race Freedom property %%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+DRF : BOOLEAN;
+
+en_DRF : BOOLEAN;
+ASSERT en_DRF => (DRF <=> (NOT (EXISTS (ee,ed IN ev_set) : (DRC(ee,ed)))));
+
+#ifndef BOUND_ASSERTIONS
+ASSERT en_DRF;
+#endif
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Additional Assertions %%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+#ifndef BOUND_ASSERTIONS
+ASSERT VE;
+#endif
+
+
+#ifdef BOUND_ASSERTIONS
+assertions_count : INT;
+ASSERT assertions_count =
+         BTOI(en_RBF2) +
+         BTOI(en_RBF) +
+         BTOI(en_RF) +
+         BTOI(en_SW4) +
+         BTOI(en_SW4c) +
+         BTOI(en_SW4di) +
+         BTOI(en_SW4d) +
+         BTOI(en_SW5) +
+         BTOI(en_SW) +
+         BTOI(en_HB4a) +
+         BTOI(en_HB4b) +
+         BTOI(en_HB4c) +
+         BTOI(en_HB) +
+         BTOI(en_CR2) +
+         BTOI(en_CR) +
+         BTOI(en_AOT) +
+         BTOI(en_TFR2aiiA1) +
+         BTOI(en_TFR2aiiA) +
+         BTOI(en_TFR2aii) +
+         BTOI(en_TFR2a) +
+         BTOI(en_TFR) +
+         BTOI(en_MO3bii) +
+         BTOI(en_MO3b) +
+         BTOI(en_MO3a) +
+         BTOI(en_MO) +
+         BTOI(en_SCA) +
+         BTOI(ne_SW) +
+         BTOI(ne_HB) +
+         BTOI(ne_RBF) +
+         BTOI(ne_RF) +
+         BTOI(en_VE) +
+         BTOI(en_DRF) +
+         BTOI(VE);
+
+ASSERT assertions_count > 33;
+#endif
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+CHECKSAT;
